@@ -1,0 +1,382 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tic Tac Toe Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #1e1e1e;
+      color: #fff;
+      text-align: center;
+      margin: 0;
+    }
+    h1 {
+      margin-top: 20px;
+    }
+    .screen {
+      display: none;
+    }
+    .active {
+      display: block;
+    }
+    button {
+      padding: 12px 24px;
+      margin: 12px;
+      font-size: 18px;
+      border: none;
+      border-radius: 6px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #gameBoard {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      gap: 10px;
+      width: max-content;
+      margin: 20px auto;
+    }
+    .cell {
+      width: 100px;
+      height: 100px;
+      font-size: 2.5rem;
+      background-color: #333;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .cell.winner {
+      background-color: #4caf50;
+      color: black;
+    }
+    canvas {
+      pointer-events: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      z-index: 999;
+    }
+
+    /* 🔻 Lose Popup */
+    #losePopup {
+      display: none;
+      position: fixed;
+      top: 30%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: #222;
+      padding: 30px;
+      border: 2px solid #ff5555;
+      border-radius: 12px;
+      color: #fff;
+      z-index: 1001;
+    }
+    #losePopup h2 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    #losePopup .emoji {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+    #overlay {
+      display: none;
+      position: fixed;
+      width: 100%;
+      height: 100%;
+      top:0;
+      left: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tic Tac Toe</h1>
+
+  <!-- MENU SCREENS -->
+  <div class="screen active" id="mainMenu">
+    <button onclick="chooseMode('friend')">Play with Friend 👥</button>
+    <button onclick="gotoDifficulty()">Play with Bot 🤖</button>
+  </div>
+
+  <div class="screen" id="difficultyMenu">
+    <h2>Select Bot Difficulty</h2>
+    <button onclick="chooseMode('bot', 'easy')">Easy</button>
+    <button onclick="chooseMode('bot', 'medium')">Medium</button>
+    <button onclick="chooseMode('bot', 'hard')">Hard</button>
+  </div>
+
+  <div class="screen" id="gameScreen">
+    <div id="gameBoard"></div>
+    <div id="status"></div>
+    <button onclick="location.reload()">🔄 Restart</button>
+  </div>
+
+  <!-- Confetti -->
+  <canvas id="confettiCanvas"></canvas>
+
+  <!-- 🔻 Lose Popup -->
+  <div id="overlay"></div>
+  <div id="losePopup">
+    <div class="emoji">👎</div>
+    <h2>You Lost!</h2>
+    <button onclick="location.reload()">Restart</button>
+  </div>
+
+  <!-- SOUND -->
+  <audio id="clickSound" src="click.mp3"></audio>
+  <audio id="winSound" src="win.mp3"></audio>
+  <audio id="tieSound" src="tie.mp3"></audio>
+  <audio id="loseSound" src="lose.mp3"></audio>
+
+  <script>
+    const WINNING_COMBOS = [
+      [0,1,2], [3,4,5], [6,7,8],
+      [0,3,6], [1,4,7], [2,5,8],
+      [0,4,8], [2,4,6]
+    ];
+
+    let board = ['', '', '', '', '', '', '', '', ''];
+    let currentPlayer = 'X';
+    let gameOver = false;
+    let mode = 'friend';
+    let difficulty = 'easy';
+
+    const mainMenu = document.getElementById('mainMenu');
+    const difficultyMenu = document.getElementById('difficultyMenu');
+    const gameScreen = document.getElementById('gameScreen');
+    const boardElem = document.getElementById('gameBoard');
+    const statusElem = document.getElementById('status');
+    const confettiCanvas = document.getElementById('confettiCanvas');
+    const overlay = document.getElementById('overlay');
+    const losePopup = document.getElementById('losePopup');
+
+    function gotoDifficulty() {
+      mainMenu.classList.remove('active');
+      difficultyMenu.classList.add('active');
+    }
+
+    function chooseMode(selectedMode, botDiff = 'easy') {
+      mode = selectedMode;
+      difficulty = botDiff;
+      mainMenu.classList.remove('active');
+      difficultyMenu.classList.remove('active');
+      gameScreen.classList.add('active');
+      startGame();
+    }
+
+    function startGame() {
+      board = Array(9).fill('');
+      currentPlayer = 'X';
+      gameOver = false;
+      renderBoard();
+      updateStatus();
+      if (mode === 'bot' && currentPlayer === 'O') {
+        setTimeout(botMove, 400);
+      }
+    }
+
+    function renderBoard() {
+      boardElem.innerHTML = '';
+      board.forEach((val, i) => {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.textContent = val;
+        cell.onclick = () => makeMove(i);
+        boardElem.appendChild(cell);
+      });
+    }
+
+    function makeMove(index) {
+      if (gameOver || board[index]) return;
+      board[index] = currentPlayer;
+      playSound('click');
+      renderBoard();
+      checkResult();
+      if (!gameOver) {
+        currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+        updateStatus();
+        if (mode === 'bot' && currentPlayer === 'O') {
+          setTimeout(botMove, 400);
+        }
+      }
+    }
+
+    function updateStatus(msg = "") {
+      statusElem.textContent = msg || `Turn: ${currentPlayer}`;
+    }
+
+    function checkResult() {
+      const winningSet = WINNING_COMBOS.find(combo => {
+        const [a, b, c] = combo;
+        return board[a] && board[a] === board[b] && board[a] === board[c];
+      });
+
+      if (winningSet) {
+        gameOver = true;
+        highlightWinner(winningSet);
+        if (mode === 'bot') {
+          if (currentPlayer === 'X') {
+            updateStatus("🎉 You Win!");
+            playSound('win');
+            launchConfetti();
+          } else {
+            updateStatus("😢 You Lost!");
+            playSound('lose');
+            showLosePopup();
+          }
+        } else {
+          updateStatus(`🎉 Player ${currentPlayer} Wins`);
+          playSound('win');
+          launchConfetti();
+        }
+        return;
+      }
+
+      if (board.every(cell => cell !== '')) {
+        gameOver = true;
+        updateStatus("🤝 It's a Tie!");
+        playSound('tie');
+      }
+    }
+
+    function highlightWinner(combo) {
+      combo.forEach(i => {
+        boardElem.children[i].classList.add("winner");
+      });
+    }
+
+    function playSound(name) {
+      const audio = {
+        click: 'clickSound',
+        win: 'winSound',
+        tie: 'tieSound',
+        lose: 'loseSound'
+      }[name];
+      const sound = document.getElementById(audio);
+      if (sound) {
+        sound.currentTime = 0;
+        sound.play();
+      }
+    }
+
+    function showLosePopup() {
+      overlay.style.display = "block";
+      losePopup.style.display = "block";
+    }
+
+    function botMove() {
+      let move;
+      if (difficulty === 'easy') move = randomMove();
+      else if (difficulty === 'medium') move = findCritical('O') || findCritical('X') || randomMove();
+      else move = bestMove();
+      if (move != null) makeMove(move);
+    }
+
+    function randomMove() {
+      const empty = board.map((v, i) => v === '' ? i : null).filter(v => v !== null);
+      return empty[Math.floor(Math.random() * empty.length)];
+    }
+
+    function findCritical(player) {
+      for (let [a, b, c] of WINNING_COMBOS) {
+        const values = [board[a], board[b], board[c]];
+        if (values.filter(v => v === player).length === 2 && values.includes("")) {
+          const idx = values.indexOf("");
+          return [a, b, c][idx];
+        }
+      }
+      return null;
+    }
+
+    function bestMove() {
+      let bestScore = -Infinity;
+      let bestMove = null;
+      for (let i = 0; i < 9; i++) {
+        if (!board[i]) {
+          board[i] = 'O';
+          let score = minimax(board, 0, false);
+          board[i] = '';
+          if (score > bestScore) {
+            bestScore = score;
+            bestMove = i;
+          }
+        }
+      }
+      return bestMove;
+    }
+
+    function minimax(tempBoard, depth, isMax) {
+      const winner = getWinner(tempBoard);
+      if (winner === 'O') return 10 - depth;
+      if (winner === 'X') return depth - 10;
+      if (tempBoard.every(c => c !== '')) return 0;
+
+      if (isMax) {
+        let best = -Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (!tempBoard[i]) {
+            tempBoard[i] = 'O';
+            best = Math.max(best, minimax(tempBoard, depth + 1, false));
+            tempBoard[i] = '';
+          }
+        }
+        return best;
+      } else {
+        let best = Infinity;
+        for (let i = 0; i < 9; i++) {
+          if (!tempBoard[i]) {
+            tempBoard[i] = 'X';
+            best = Math.min(best, minimax(tempBoard, depth + 1, true));
+            tempBoard[i] = '';
+          }
+        }
+        return best;
+      }
+    }
+
+    function getWinner(tempBoard) {
+      for (let [a, b, c] of WINNING_COMBOS) {
+        if (tempBoard[a] && tempBoard[a] === tempBoard[b] && tempBoard[b] === tempBoard[c])
+          return tempBoard[a];
+      }
+      return null;
+    }
+
+    function launchConfetti() {
+      let canvas = confettiCanvas;
+      let ctx = canvas.getContext("2d");
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      let confetti = Array(150).fill().map(() => ({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height * 0.4,
+        r: Math.random() * 6 + 4,
+        color: `hsl(${Math.random() * 360}, 100%, 50%)`,
+        v: Math.random() * 5 + 2,
+      }));
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (let c of confetti) {
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+          ctx.fillStyle = c.color;
+          ctx.fill();
+          c.y += c.v;
+          if (c.y > canvas.height) c.y = -10;
+        }
+        requestAnimationFrame(draw);
+      }
+      draw();
+    }
+  </script>
+</body>
+</html>
